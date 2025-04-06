@@ -1,9 +1,9 @@
 import pandas as pd
 from flask import Flask, request, jsonify, render_template
 from datetime import datetime, timedelta
-import time  # Yeh add kar rha hoon slow requests ke liye
+import time  
 
-# Data load karo
+
 containers_df = pd.read_csv('containers.csv')
 items_df = pd.read_csv('input_items.csv', dtype={'item_id': str})
 
@@ -31,7 +31,7 @@ for _, row in items_df.iterrows():
         'preferred_zone': row['preferred_zone'],
         'container': None
     }
-print("Loaded item IDs:", list(items.keys()))  # Yeh naya hai
+print("Loaded item IDs:", list(items.keys()))  
 
 # Placement function with enhanced debug
 def place_item(item_id):
