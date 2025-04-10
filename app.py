@@ -1,12 +1,16 @@
 import pandas as pd
 from flask import Flask, request, jsonify, render_template
 from datetime import datetime, timedelta
-import time  
 
+# Load CSV files
+try:
+    containers_df = pd.read_csv('containers.csv')
+    items_df = pd.read_csv('input_items.csv', dtype={'item_id': str})
+except FileNotFoundError as e:
+    print(f"Error: {e}. Please ensure containers.csv and input_items.csv are in the folder.")
+    exit(1)
 
-containers_df = pd.read_csv('containers.csv')
-items_df = pd.read_csv('input_items.csv', dtype={'item_id': str})
-
+# Initialize containers and items dictionaries
 containers = {}
 for _, row in containers_df.iterrows():
     containers[row['container_id']] = {
@@ -31,18 +35,17 @@ for _, row in items_df.iterrows():
         'preferred_zone': row['preferred_zone'],
         'container': None
     }
-print("Loaded item IDs:", list(items.keys()))  
+print("Loaded item IDs:", list(items.keys()))
 
 # Placement function with enhanced debug
 def place_item(item_id):
-    print(f"Checking item: {item_id}, Exists: {item_id in items}")
     if item_id not in items:
         return {"status": "error", "message": "Item not found"}
     item = items[item_id]
     best_container = None
     best_score = -1
-    total_mass = sum(items[i]['mass'] for i in containers.get(best_container, {}).get('items', [])) if best_container else 0
     for container_id, container in containers.items():
+        total_mass = sum(items[i]['mass'] for i in container.get('items', [])) if container.get('items') else 0
         if (item['width'] <= container['width'] and 
             item['depth'] <= container['depth'] and 
             item['height'] <= container['height'] and 
@@ -101,6 +104,37 @@ def identify_waste():
                 print(f"Warning: {item_id} ka expiry_date galat hai: {item['expiry_date']}")
     return waste_items
 
+# Waste return plan function
+def waste_return_plan():
+    waste = identify_waste()
+    return {"return_plan": waste, "status": "success"}
+
+# Waste complete undocking function
+def waste_complete_undocking():
+    waste = identify_waste()
+    for item_id in waste:
+        if items[item_id]['container']:
+            containers[items[item_id]['container']]['items'].remove(item_id)
+            items[item_id]['container'] = None
+    return {"status": "success", "undocked": waste}
+
+# Import items function
+def import_items(data):
+    for item in data:
+        items[item['item_id']] = item
+    return {"status": "success", "imported": len(data)}
+
+# Import containers function
+def import_containers(data):
+    for container in data:
+        containers[container['container_id']] = container
+    return {"status": "success", "imported": len(data)}
+
+# Export arrangement function
+def export_arrangement():
+    arrangement = {cid: c['items'] for cid, c in containers.items()}
+    return {"arrangement": arrangement, "status": "success"}
+
 # Simulate day function with waste removal
 def simulate_day():
     current_date = datetime.now()
@@ -116,15 +150,21 @@ def simulate_day():
                     items[item_id]['container'] = None
     return {"status": "success", "message": "Day simulated", "waste_removed": waste_removed}
 
+# Simple logging function
+def get_logs():
+    return {"logs": [f"Item {item_id} placed in {containers.get(items[item_id]['container'], 'None')} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}" for item_id in items if items[item_id]['container']], "status": "success"}
+
 # Flask app setup
 app = Flask(__name__)
 
-@app.route('/api/placement', methods=['POST'])
+@app.route('/api/placement', methods=['GET', 'POST'])
 def api_placement():
-    item_id = request.json.get('item_id')
-    result = place_item(item_id)
-    time.sleep(0.1)  # Slow down responses to avoid overload
-    return jsonify(result)
+    if request.method == 'POST':
+        item_id = request.json.get('item_id')
+        result = place_item(item_id)
+        return jsonify(result)
+    elif request.method == 'GET':
+        return jsonify({"message": "Use POST method with JSON body {'item_id': '000001'} to place an item.", "status": "info"})
 
 @app.route('/api/search', methods=['GET'])
 def api_search():
@@ -143,14 +183,47 @@ def api_waste_identify():
     waste = identify_waste()
     return jsonify({"waste_items": waste})
 
+@app.route('/api/waste/return-plan', methods=['GET'])
+def api_waste_return_plan():
+    result = waste_return_plan()
+    return jsonify(result)
+
+@app.route('/api/waste/complete-undocking', methods=['POST'])
+def api_waste_complete_undocking():
+    result = waste_complete_undocking()
+    return jsonify(result)
+
+@app.route('/api/import/items', methods=['POST'])
+def api_import_items():
+    data = request.json.get('items', [])
+    result = import_items(data)
+    return jsonify(result)
+
+@app.route('/api/import/containers', methods=['POST'])
+def api_import_containers():
+    data = request.json.get('containers', [])
+    result = import_containers(data)
+    return jsonify(result)
+
+@app.route('/api/export/arrangement', methods=['GET'])
+def api_export_arrangement():
+    result = export_arrangement()
+    return jsonify(result)
+
 @app.route('/api/simulate/day', methods=['POST'])
 def api_simulate_day():
     result = simulate_day()
     return jsonify(result)
 
+@app.route('/api/logs', methods=['GET'])
+def api_logs():
+    result = get_logs()
+    return jsonify(result)
+
 @app.route('/')
 def home():
-    return render_template('index.html')
+    sample_items = list(items.keys())[:5]  # First 5 items as sample
+    return render_template('index.html', items=sample_items)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0", port=8000)
