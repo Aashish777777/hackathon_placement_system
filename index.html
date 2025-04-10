@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Placement Allocation System</title>
+</head>
+<body>
+    <h1>Placement Allocation System</h1>
+    <p>Welcome! This system assigns containers to item IDs.</p>
+    <h2>Sample Items:</h2>
+    <ul>
+        {% for item_id in items %}
+            <li>{{ item_id }}</li>
+        {% endfor %}
+    </ul>
+    <p>Try the API at <a href="/api/placement">/api/placement</a>.</p>
+</body>
+</html>
